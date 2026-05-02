@@ -66,8 +66,8 @@ async function load() {
     var r = await Promise.all([api("/dashboard/summary"),api("/tasks/"),api("/projects/"),api("/notifications/"),api("/performance/summary")]);
     state.summary=r[0]; state.tasks=r[1]; state.projects=r[2]; state.notifications=r[3]; state.perf=r[4];
     if(isManager()) {
-      var m = await Promise.all([api("/users/"),api("/dashboard/manager-report"),api("/daily-updates/"),api("/performance/leaderboard"),api("/leave/all"),api("/attendance/all-today"),api("/leave/dashboard").catch(function(){return{};}),api("/attendance/today").catch(function(){return{logs:[],summary:{}};}),api("/attendance/my-history").catch(function(){return[];})]);
-      state.users=m[0]; state.report=m[1]; state.updates=m[2]; state.leaderboard=m[3]; state.leaves=m[4]; state.allAttendance=m[5]; state.leaveDash=m[6]; state.punchToday=m[7]; state.punchHistory=m[8];
+      var m = await Promise.all([api("/users/"),api("/dashboard/manager-report"),api("/daily-updates/"),api("/performance/leaderboard"),api("/leave/all"),api("/attendance/all-today"),api("/leave/dashboard").catch(function(){return{};}),api("/attendance/today").catch(function(){return{logs:[],summary:{}};}),api("/attendance/my-history").catch(function(){return[];}),api("/attendance/monthly-summary").catch(function(){return{employees:[]};})]);
+      state.users=m[0]; state.report=m[1]; state.updates=m[2]; state.leaderboard=m[3]; state.leaves=m[4]; state.allAttendance=m[5]; state.leaveDash=m[6]; state.punchToday=m[7]; state.punchHistory=m[8]; state.monthlySummary=m[9];
     } else {
       var e = await Promise.all([api("/daily-updates/mine").catch(function(){return[];}),api("/attendance/today").catch(function(){return{logs:[],summary:{}};}),api("/attendance/my-history").catch(function(){return[];}),api("/leave/mine").catch(function(){return[];}),api("/leave/balance").catch(function(){return{balances:[],summary:{}};})]);
       state.updates=e[0]; state.punchToday=e[1]; state.punchHistory=e[2]; state.leaves=e[3]; state.leaveBalance=e[4]; state.users=[]; state.report=[];
@@ -151,15 +151,6 @@ function renderLogin() {
             '<div class="lp-options"><label class="lp-check"><input type="checkbox" checked /> Remember me</label><a href="#" onclick="return false">Forgot password?</a></div>' +
             '<div id="loginError"></div>' +
             '<button type="submit" class="lp-btn" id="loginBtn"><span>Sign In</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>' +
-            '<div class="lp-demo">' +
-              '<div class="lp-demo-title">Quick Access — Demo Accounts</div>' +
-              '<div class="lp-demo-list">' +
-                '<div class="lp-demo-item" onclick="fillDemo(\'superadmin@demo.com\',\'super123\')"><span class="lp-demo-badge sa">Super Admin</span><span>superadmin@demo.com</span></div>' +
-                '<div class="lp-demo-item" onclick="fillDemo(\'admin@demo.com\',\'admin123\')"><span class="lp-demo-badge mgr">Admin</span><span>admin@demo.com</span></div>' +
-                '<div class="lp-demo-item" onclick="fillDemo(\'manager@demo.com\',\'manager123\')"><span class="lp-demo-badge mgr">Manager</span><span>manager@demo.com</span></div>' +
-                '<div class="lp-demo-item" onclick="fillDemo(\'aman@demo.com\',\'aman123\')"><span class="lp-demo-badge emp">Employee</span><span>aman@demo.com</span></div>' +
-              '</div>' +
-            '</div>' +
           '</form>' +
         '</div>' +
       '</div>' +
@@ -179,7 +170,7 @@ window.togglePwdVis=function(){var p=$("password");p.type=p.type==="password"?"t
 /* ====== SHELL ====== */
 function shell(content) {
   var mNav=[["dashboard","dashboard","Dashboard"],["tasks","tasks","All Tasks"],["employees","people","Employees"],["projects","folder","Projects"],["calendar","cal","Calendar"],["performance","trophy","Performance"],["attendance","clock","Attendance"],["leave","leaf","Leave Mgmt"],["daily","cal","Daily Reports"],["notifications","bell","Notifications"]];
-  if(isAdmin()) mNav.splice(3,0,["usermgmt","people","User Management"]);
+  if(isAdmin()){mNav.splice(1,0,["overview","star","Admin Overview"]);mNav.splice(4,0,["usermgmt","people","User Management"]);}
   var eNav=[["dashboard","dashboard","My Dashboard"],["tasks","tasks","My Tasks"],["calendar","cal","Calendar"],["attendance","clock","Attendance"],["leave","leaf","Leave"],["daily","cal","Daily Update"],["notifications","bell","Notifications"]];
   var nav=isManager()?mNav:eNav;
   var unread=state.notifications.filter(function(n){return!n.is_read;}).length;
@@ -987,6 +978,211 @@ function renderAddEmployeeModal(editUser) {
 }
 
 /* ====== USER MANAGEMENT PAGE ====== */
+/* ====== ADMIN OVERVIEW — Combined Dashboard ====== */
+function adminOverviewPage() {
+  if (!isAdmin()) return shell('<p class="muted">Access denied.</p>');
+
+  var s = state.summary || {};
+  var p = state.perf || {};
+  var att = state.allAttendance || {};
+  var attStats = att.stats || {};
+  var attEmps = att.employees || [];
+  var ld = state.leaveDash || {};
+  var users = state.users || [];
+  var tasks = state.tasks || [];
+  var leaves = state.leaves || [];
+  var now = new Date();
+
+  // Counts
+  var totalUsers = users.length;
+  var activeUsers = users.filter(function(u){return u.is_active;}).length;
+  var totalTasks = s.total_tasks || 0;
+  var completedTasks = s.completed || 0;
+  var overdueTasks = tasks.filter(function(t){return t.deadline && new Date(t.deadline)<now && t.status!=="completed";}).length;
+  var pendingLeaves = ld.pending || 0;
+  var onLeaveToday = ld.on_leave_today || 0;
+  var presentToday = attStats.present || 0;
+  var notCheckedIn = attStats.pending || 0;
+  var lateToday = attStats.late || 0;
+  var totalWorkHours = attStats.total_work_hours || 0;
+
+  // Top stats grid — 5 columns
+  var topStats =
+    '<div class="ov-stats">' +
+      '<div class="ov-stat clickable" onclick="go(\'usermgmt\')"><div class="ov-stat-icon blue">'+icon("people")+'</div><div class="ov-stat-body"><span class="ov-stat-val">'+totalUsers+'</span><span>Total Users</span></div><span class="ov-stat-sub">'+activeUsers+' active</span></div>' +
+      '<div class="ov-stat clickable" onclick="go(\'tasks\')"><div class="ov-stat-icon green">'+icon("tasks")+'</div><div class="ov-stat-body"><span class="ov-stat-val">'+totalTasks+'</span><span>Total Tasks</span></div><span class="ov-stat-sub">'+completedTasks+' done</span></div>' +
+      '<div class="ov-stat clickable" onclick="go(\'attendance\')"><div class="ov-stat-icon teal">'+icon("check")+'</div><div class="ov-stat-body"><span class="ov-stat-val">'+presentToday+'</span><span>Present Today</span></div><span class="ov-stat-sub">'+notCheckedIn+' pending</span></div>' +
+      '<div class="ov-stat clickable" onclick="go(\'leave\')"><div class="ov-stat-icon amber">'+icon("leaf")+'</div><div class="ov-stat-body"><span class="ov-stat-val">'+pendingLeaves+'</span><span>Pending Leaves</span></div><span class="ov-stat-sub">'+onLeaveToday+' on leave</span></div>' +
+      '<div class="ov-stat clickable" onclick="popupDashCard(\'overdue\')"><div class="ov-stat-icon red">'+icon("bell")+'</div><div class="ov-stat-body"><span class="ov-stat-val">'+overdueTasks+'</span><span>Overdue Tasks</span></div><span class="ov-stat-sub">'+lateToday+' late arrivals</span></div>' +
+    '</div>';
+
+  // Section 1: Attendance snapshot
+  var attRows = attEmps.slice(0, 8).map(function(a) {
+    var statusDot = a.status==="working"?'<span class="live-dot"></span> Working':a.status==="on_break"?'On Break':a.status==="completed"?'Done':a.status==="pending"?'Not In':'—';
+    return '<tr>' +
+      '<td><div class="emp-cell"><div class="avatar-xs">'+initials(a.name)+'</div><strong>'+esc(a.name)+'</strong></div></td>' +
+      '<td>'+badge(a.role)+'</td>' +
+      '<td>'+esc(a.department||"—")+'</td>' +
+      '<td>'+attStatusBadge(a.status)+'</td>' +
+      '<td>'+(a.summary.first_in?fmtTime(a.summary.first_in):'—')+'</td>' +
+      '<td><strong>'+(a.summary.total_hours||0)+'h</strong></td>' +
+      '<td>'+a.punch_count+'</td>' +
+    '</tr>';
+  }).join("");
+
+  // Section 2: Tasks by status
+  var tasksByStatus = [
+    {label:"Pending",status:"pending",color:"amber"},
+    {label:"In Progress",status:"in_progress",color:"blue"},
+    {label:"Under Review",status:"under_review",color:"purple"},
+    {label:"Completed",status:"completed",color:"green"},
+    {label:"Blocked",status:"blocked",color:"red"}
+  ];
+  var taskBars = tasksByStatus.map(function(ts) {
+    var count = tasks.filter(function(t){return t.status===ts.status;}).length;
+    var w = totalTasks > 0 ? Math.max(4, (count/totalTasks)*100) : 0;
+    return '<div class="ov-bar-row">' +
+      '<span class="ov-bar-label">'+ts.label+'</span>' +
+      '<div class="ov-bar-track"><div class="ov-bar-fill '+ts.color+' anim-grow" style="width:'+w+'%"></div></div>' +
+      '<span class="ov-bar-val">'+count+'</span>' +
+    '</div>';
+  }).join("");
+
+  // Section 3: Recent leaves
+  var recentLeaves = leaves.slice(0, 5).map(function(l) {
+    var emrg = l.is_emergency ? ' '+badge("urgent") : '';
+    return '<div class="activity-row">' +
+      '<div class="activity-dot '+(l.status==="approved"?"completed":l.status==="pending"?"pending":"blocked")+'"></div>' +
+      '<div class="activity-body"><strong>'+esc(getUserName(l.user_id))+'</strong><span class="muted">'+esc(l.leave_type)+' &middot; '+l.start_date+' to '+l.end_date+emrg+'</span></div>' +
+      badge(l.status) +
+    '</div>';
+  }).join("");
+
+  // Section 4: Employee performance
+  var perfRows = (state.report || []).slice(0, 6).map(function(r) {
+    var pr = pct(r.completed_tasks, r.total_tasks);
+    return '<tr>' +
+      '<td><div class="emp-cell"><div class="avatar-xs">'+initials(r.employee)+'</div><strong>'+esc(r.employee)+'</strong></div></td>' +
+      '<td class="center">'+r.total_tasks+'</td>' +
+      '<td class="center text-green">'+r.completed_tasks+'</td>' +
+      '<td class="center text-amber">'+r.pending_tasks+'</td>' +
+      '<td><div class="progress-bar"><div class="progress-fill" style="width:'+pr+'%"></div></div><span class="muted sm">'+pr+'%</span></td>' +
+    '</tr>';
+  }).join("");
+
+  // Section 5: Quick metrics
+  var quickMetrics =
+    '<div class="ov-metrics">' +
+      '<div class="ov-metric"><span class="ov-metric-val text-blue">'+(s.in_progress||0)+'</span><span>Active Tasks</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val text-green">'+(p.completed_this_week||0)+'</span><span>Done This Week</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val text-amber">'+totalWorkHours+'h</span><span>Work Hours Today</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val">'+(state.projects||[]).length+'</span><span>Projects</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val">'+(p.productivity_score||0)+'</span><span>Team Score</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val text-red">'+(s.blocked||0)+'</span><span>Blocked</span></div>' +
+    '</div>';
+
+  // My punch section
+  var myPunch = state.punchToday || {logs:[], summary:{}};
+  var mySum = myPunch.summary || {};
+  var canIn = !mySum.status || mySum.status === "checked_out" || mySum.status === "absent";
+  var canOut = mySum.status === "working";
+  var punchStatus = '';
+  if (mySum.status === "working") punchStatus = '<span class="live-dot"></span> Working since '+(mySum.first_in?fmtTime(mySum.first_in):'--');
+  else if (mySum.status === "checked_out") punchStatus = 'Done — '+mySum.total_hours+'h worked';
+  else punchStatus = 'Not punched in';
+
+  var punchBar =
+    '<div class="ov-punch">' +
+      '<div class="ov-punch-status">'+punchStatus+'</div>' +
+      '<div class="ov-punch-btns">' +
+        '<button class="btn punch-in'+(canIn?"":" disabled")+'" onclick="showPunchModal(\'in\')"'+(canIn?'':' disabled')+'>'+icon("clock")+' Punch In</button>' +
+        '<button class="btn punch-out'+(canOut?"":" disabled")+'" onclick="showPunchModal(\'out\')"'+(canOut?'':' disabled')+'>'+icon("logout")+' Punch Out</button>' +
+      '</div>' +
+      '<div class="ov-punch-stats">' +
+        '<span>'+icon("clock")+' '+(mySum.total_hours||0)+'h worked</span>' +
+        '<span>'+icon("clock")+' '+(mySum.break_minutes||0)+'m break</span>' +
+        '<span>'+icon("check")+' '+(myPunch.logs||[]).length+' punches</span>' +
+      '</div>' +
+    '</div>';
+
+  return shell(
+    '<div class="ov-header"><h2>System Overview</h2><span class="muted">Real-time data from all modules</span></div>' +
+    punchBar +
+    topStats +
+    quickMetrics +
+    '<div class="grid-2" style="margin-top:20px">' +
+      // Left: Attendance
+      '<div class="card">' +
+        '<div class="card-header"><h3>'+icon("clock")+' Attendance Today</h3><button class="btn-sm" onclick="go(\'attendance\')">View All</button></div>' +
+        '<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Role</th><th>Dept</th><th>Status</th><th>In</th><th>Hours</th><th>Punches</th></tr></thead>' +
+        '<tbody>'+(attRows||'<tr><td colspan="7" class="muted center">No data</td></tr>')+'</tbody></table></div>' +
+      '</div>' +
+      // Right: Task distribution
+      '<div>' +
+        '<div class="card" style="margin-bottom:18px">' +
+          '<div class="card-header"><h3>'+icon("tasks")+' Task Distribution</h3><button class="btn-sm" onclick="go(\'tasks\')">View All</button></div>' +
+          taskBars +
+        '</div>' +
+        '<div class="card">' +
+          '<div class="card-header"><h3>'+icon("leaf")+' Recent Leave Requests</h3><button class="btn-sm" onclick="go(\'leave\')">View All</button></div>' +
+          '<div class="activity-list">'+(recentLeaves||'<p class="muted">No leaves</p>')+'</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card" style="margin-top:18px">' +
+      '<div class="card-header"><h3>'+icon("trophy")+' Employee Performance</h3><button class="btn-sm" onclick="go(\'performance\')">View All</button></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Employee</th><th class="center">Total</th><th class="center">Done</th><th class="center">Pending</th><th>Progress</th></tr></thead>' +
+      '<tbody>'+(perfRows||'<tr><td colspan="5" class="muted center">No data</td></tr>')+'</tbody></table></div>' +
+    '</div>' +
+    _buildMonthlyPunchSection()
+  );
+}
+
+function _buildMonthlyPunchSection() {
+  var ms = state.monthlySummary || {};
+  var emps = ms.employees || [];
+  var monthName = ms.month_name || "This Month";
+  var year = ms.year || new Date().getFullYear();
+
+  if (!emps.length) return '<div class="card" style="margin-top:18px"><h3>'+icon("clock")+' Monthly Attendance</h3><p class="muted">No data available</p></div>';
+
+  var totalPunches = 0, totalHours = 0, totalPresent = 0, totalLate = 0;
+  emps.forEach(function(e) { totalPunches += e.total_punches; totalHours += e.total_hours; totalPresent += e.days_present; totalLate += e.late_days; });
+
+  var monthStats =
+    '<div class="ov-metrics" style="margin-bottom:16px">' +
+      '<div class="ov-metric"><span class="ov-metric-val text-blue">'+totalPunches+'</span><span>Total Punches</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val text-green">'+round1(totalHours)+'h</span><span>Total Hours</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val">'+totalPresent+'</span><span>Days Present</span></div>' +
+      '<div class="ov-metric"><span class="ov-metric-val text-red">'+totalLate+'</span><span>Late Days</span></div>' +
+    '</div>';
+
+  var rows = emps.map(function(e) {
+    var attPct = e.working_days > 0 ? pct(e.days_present, e.working_days) : 0;
+    var lateWarn = e.late_days > 0 ? ' <span class="late-badge sm">'+e.late_days+' late</span>' : '';
+    var absentWarn = e.absent_days > 0 ? ' <span class="under-hours">'+e.absent_days+' absent</span>' : '';
+    return '<tr class="clickable" onclick="popupMonthlyDetail('+e.user_id+')">' +
+      '<td><div class="emp-cell"><div class="avatar-xs">'+initials(e.name)+'</div><div><strong>'+esc(e.name)+'</strong><span class="muted sm">'+esc(e.email)+'</span></div></div></td>' +
+      '<td>'+badge(e.role)+'</td>' +
+      '<td>'+esc(e.department)+'</td>' +
+      '<td class="center"><strong>'+e.total_punches+'</strong></td>' +
+      '<td class="center">'+e.days_present+'/'+e.working_days+absentWarn+'</td>' +
+      '<td class="center"><strong>'+e.total_hours+'h</strong></td>' +
+      '<td class="center">'+e.avg_hours+'h</td>' +
+      '<td class="center">'+e.total_break_min+'m</td>' +
+      '<td class="center">'+lateWarn+(e.late_days===0?'0':'')+'</td>' +
+      '<td><div class="progress-bar"><div class="progress-fill" style="width:'+attPct+'%"></div></div><span class="muted sm">'+attPct+'%</span></td>' +
+    '</tr>';
+  }).join("");
+
+  return '<div class="card no-pad" style="margin-top:18px">' +
+    '<div class="att-table-header"><h3>'+icon("clock")+' Monthly Attendance — '+monthName+' '+year+'</h3><button class="btn-sm" onclick="window.open(\'/api/export/attendance-csv\')">'+icon("download")+' Export</button></div>' +
+    '<div style="padding:16px 18px 0">'+monthStats+'</div>' +
+    '<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Role</th><th>Dept</th><th class="center">Punches</th><th class="center">Present</th><th class="center">Hours</th><th class="center">Avg/Day</th><th class="center">Break</th><th class="center">Late</th><th>Attendance %</th></tr></thead>' +
+    '<tbody>'+rows+'</tbody></table></div></div>';
+}
+function round1(n){return Math.round(n*10)/10;}
+
 function userManagementPage() {
   if (!isAdmin()) return shell('<p class="muted">Access denied. Admin only.</p>');
 
@@ -1059,7 +1255,7 @@ function userManagementPage() {
 function render() {
   if(!token()||!state.user)return renderLogin();
   var pages;
-  if(isManager()){pages={dashboard:managerDashboard,tasks:managerTasks,employees:managerEmployees,usermgmt:userManagementPage,projects:projectsPage,calendar:calendarPage,performance:performancePage,attendance:attendancePage,leave:leavePage,daily:dailyPage,notifications:notificationsPage};}
+  if(isManager()){pages={dashboard:managerDashboard,overview:adminOverviewPage,tasks:managerTasks,employees:managerEmployees,usermgmt:userManagementPage,projects:projectsPage,calendar:calendarPage,performance:performancePage,attendance:attendancePage,leave:leavePage,daily:dailyPage,notifications:notificationsPage};}
   else{pages={dashboard:employeeDashboard,tasks:employeeTasks,calendar:calendarPage,attendance:attendancePage,leave:leavePage,daily:dailyPage,notifications:notificationsPage};}
   if(state.page==="calendar")loadCalendar().then(function(){appEl.innerHTML=(pages[state.page]||pages.dashboard)();attachEvents();});
   else{appEl.innerHTML=(pages[state.page]||pages.dashboard)();attachEvents();}
@@ -1219,6 +1415,16 @@ window.deleteFile=async function(fid,tid){if(!confirm("Delete this file?"))retur
 window.toggleAttDetail=function(id){var el=$(id);if(el)el.style.display=el.style.display==="none"?"table-row":"none";};
 window.attCardClick=function(key){state._attCardFilter=(state._attCardFilter===key)?"":key;render();};
 window.empAttCardClick=function(key){state._empAttCardFilter=(state._empAttCardFilter===key)?"":key;render();};
+window.popupMonthlyDetail=function(userId){
+  var ms=state.monthlySummary||{};
+  var emp=(ms.employees||[]).find(function(e){return e.user_id===userId;});
+  if(!emp)return;
+  var rows=emp.daily.map(function(d){
+    var late=d.is_late?'<span class="late-badge sm">Late</span>':'';
+    return [new Date(d.date+"T00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short"}),''+d.punches,d.first_in?fmtTime(d.first_in):'—',d.last_out?fmtTime(d.last_out):'—','<strong>'+d.hours+'h</strong>',d.break_min+'m',late];
+  });
+  showInfoPopup(emp.name+' — '+ms.month_name+' Daily Log',rows,["Date","Punches","First In","Last Out","Hours","Break","Late"]);
+};
 window.calPrev=function(){state.calMonth--;if(state.calMonth<0){state.calMonth=11;state.calYear--;}render();};
 window.calNext=function(){state.calMonth++;if(state.calMonth>11){state.calMonth=0;state.calYear++;}render();};
 

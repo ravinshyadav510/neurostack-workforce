@@ -361,3 +361,61 @@ def employee_history(user_id: int, days: int = 30, db: Session = Depends(get_db)
             ]
         })
     return result
+
+
+# ---- Monthly punch summary for all users ----
+@router.get("/monthly-summary")
+def monthly_summary(month: int = None, year: int = None, db: Session = Depends(get_db), current_user=Depends(require_manager_or_admin)):
+    today = date.today()
+    m = month or today.month
+    y = year or today.year
+    first_day = date(y, m, 1)
+    last_day = date(y + (1 if m == 12 else 0), (m % 12) + 1, 1) - timedelta(days=1)
+
+    if current_user.role in [UserRole.super_admin, UserRole.admin]:
+        target_users = db.query(User).filter(User.is_active == 1, User.id != current_user.id).all()
+    else:
+        target_users = db.query(User).filter(User.reporting_to_id == current_user.id, User.is_active == 1).all()
+
+    results = []
+    for usr in target_users:
+        logs = db.query(PunchLog).filter(PunchLog.user_id == usr.id, PunchLog.date >= first_day, PunchLog.date <= last_day).order_by(PunchLog.timestamp.asc()).all()
+        by_date = {}
+        for l in logs:
+            d = str(l.date)
+            if d not in by_date:
+                by_date[d] = []
+            by_date[d].append(l)
+
+        total_punches = len(logs)
+        days_present = len(by_date)
+        total_hours = 0.0
+        total_break = 0
+        late_days = 0
+        daily_records = []
+        for d in sorted(by_date.keys()):
+            day_logs = by_date[d]
+            s = _calc_summary(day_logs)
+            total_hours += s["total_hours"]
+            total_break += s["break_minutes"]
+            if s["is_late"]:
+                late_days += 1
+            daily_records.append({"date": d, "punches": len(day_logs), "hours": s["total_hours"], "break_min": s["break_minutes"], "first_in": s["first_in"], "last_out": s["last_out"], "is_late": s["is_late"]})
+
+        end_check = min(last_day, today)
+        working_days = sum(1 for dd in range((end_check - first_day).days + 1) if (first_day + timedelta(days=dd)).weekday() < 5)
+
+        results.append({
+            "user_id": usr.id, "name": usr.full_name, "email": usr.email, "role": usr.role.value,
+            "department": usr.department or "Unassigned",
+            "total_punches": total_punches, "days_present": days_present,
+            "working_days": working_days, "absent_days": max(0, working_days - days_present),
+            "total_hours": round(total_hours, 1), "avg_hours": round(total_hours / max(1, days_present), 1),
+            "total_break_min": total_break, "late_days": late_days, "daily": daily_records
+        })
+
+    return {
+        "month": m, "year": y,
+        "month_name": ["","January","February","March","April","May","June","July","August","September","October","November","December"][m],
+        "employees": results
+    }

@@ -591,6 +591,48 @@ tr.clickable:hover{background:rgba(255,255,255,.03)}
 .leave-pending-meta{display:flex;gap:10px;font-size:12px;color:var(--muted);margin-bottom:4px}
 .leave-pending-actions{display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)}
 
+/* ====== ADMIN OVERVIEW ====== */
+.ov-header{margin-bottom:20px}
+.ov-header h2{font-size:22px;font-weight:800;margin-bottom:2px}
+.ov-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+.ov-stat{background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:all .2s;position:relative;cursor:pointer}
+.ov-stat:hover{transform:translateY(-2px);border-color:rgba(99,102,241,.25)}
+.ov-stat-icon{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;flex-shrink:0}
+.ov-stat-icon .ico{width:18px;height:18px;color:#fff}
+.ov-stat-icon.blue{background:var(--primary)}.ov-stat-icon.green{background:var(--green)}.ov-stat-icon.amber{background:var(--amber)}.ov-stat-icon.red{background:var(--red)}.ov-stat-icon.teal{background:#0d9488}.ov-stat-icon.purple{background:#7c3aed}
+.ov-stat-body{display:flex;flex-direction:column}
+.ov-stat-val{font-size:24px;font-weight:800;line-height:1}
+.ov-stat-body span:last-child{font-size:11px;color:var(--muted);margin-top:2px}
+.ov-stat-sub{position:absolute;bottom:6px;right:10px;font-size:10px;color:var(--muted)}
+
+/* Punch bar on overview */
+.ov-punch{background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)}
+.ov-punch-status{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.ov-punch-btns{display:flex;gap:8px}
+.ov-punch-btns .btn{padding:8px 18px;font-size:13px}
+.ov-punch-stats{display:flex;gap:16px;font-size:12px;color:var(--muted)}
+.ov-punch-stats span{display:flex;align-items:center;gap:4px}
+.ov-punch-stats .ico{width:14px;height:14px}
+@media(max-width:640px){.ov-punch{flex-direction:column;align-items:stretch;text-align:center}.ov-punch-btns{justify-content:center}.ov-punch-stats{justify-content:center}}
+
+/* Quick metrics */
+.ov-metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:4px}
+.ov-metric{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center}
+.ov-metric-val{font-size:20px;font-weight:800;display:block}
+.ov-metric span:last-child{font-size:10px;color:var(--muted)}
+
+/* Horizontal bar chart */
+.ov-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.ov-bar-label{width:90px;font-size:12px;color:var(--muted);text-align:right;flex-shrink:0}
+.ov-bar-track{flex:1;height:20px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden}
+.ov-bar-fill{height:100%;border-radius:6px;min-width:4px}
+.ov-bar-fill.green{background:var(--green)}.ov-bar-fill.blue{background:var(--blue)}.ov-bar-fill.amber{background:var(--amber)}.ov-bar-fill.red{background:var(--red)}.ov-bar-fill.purple{background:#7c3aed}
+.ov-bar-val{width:30px;font-size:13px;font-weight:700;text-align:right}
+
+/* Responsive */
+@media(max-width:900px){.ov-stats{grid-template-columns:1fr 1fr}.ov-metrics{grid-template-columns:1fr 1fr 1fr}}
+@media(max-width:640px){.ov-stats{grid-template-columns:1fr}.ov-metrics{grid-template-columns:1fr 1fr}}
+
 /* ====== LEADERBOARD ====== */
 .gold{color:#f59e0b;font-size:16px}.silver{color:#9ca3af;font-size:16px}.bronze{color:#d97706;font-size:16px}
 

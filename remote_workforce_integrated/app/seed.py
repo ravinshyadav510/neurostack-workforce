@@ -11,7 +11,7 @@ def seed_demo_data(db: Session):
     if db.query(User).first():
         return
 
-    super_admin = User(full_name="System Admin", email="superadmin@demo.com", hashed_password=hash_password("super123"), role=UserRole.super_admin, department="IT")
+    super_admin = User(full_name="Aman Yadav", email="ravinshyadav510@gmail.com", hashed_password=hash_password("49078"), role=UserRole.super_admin, department="IT")
     admin = User(full_name="Ravinsh Kumar", email="admin@demo.com", hashed_password=hash_password("admin123"), role=UserRole.admin, department="IT")
     manager = User(full_name="Priya Sharma", email="manager@demo.com", hashed_password=hash_password("manager123"), role=UserRole.manager, department="Engineering")
     emp1 = User(full_name="Aman Developer", email="aman@demo.com", hashed_password=hash_password("aman123"), role=UserRole.employee, department="Engineering")
