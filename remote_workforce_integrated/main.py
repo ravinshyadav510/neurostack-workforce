@@ -2,6 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from app.core.config import CORS_ORIGINS, SEED_DB
 from app.database import Base, engine, SessionLocal
@@ -49,6 +50,17 @@ app.include_router(export.router, prefix="/api")
 def health():
     return {"status": "ok", "message": "API is running"}
 
-# Frontend static app
+# PWA — serve service-worker.js and manifest.json from root with correct headers
 static_dir = Path(__file__).parent / "static"
+
+@app.get("/service-worker.js")
+def service_worker():
+    return FileResponse(static_dir / "service-worker.js", media_type="application/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+@app.get("/manifest.json")
+def manifest():
+    return FileResponse(static_dir / "manifest.json", media_type="application/manifest+json")
+
+# Frontend static app
 app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")
